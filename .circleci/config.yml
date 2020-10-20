@@ -13,7 +13,11 @@ workflows:
 jobs:
   test-36: &test-template
     docker:
-      - image: circleci/python:3.6
+      - &docker-template
+        image: circleci/python:3.6
+        auth:
+          username: $DOCKERHUB_USERNAME
+          password: $DOCKERHUB_PASSWORD
     steps:
       - checkout
       - restore_cache:
@@ -48,18 +52,22 @@ jobs:
   test-37:
     <<: *test-template
     docker:
-      - image: circleci/python:3.7
+      - <<: *docker-template
+        image: circleci/python:3.7
   test-38:
     <<: *test-template
     docker:
-      - image: circleci/python:3.8
+      - <<: *docker-template
+        image: circleci/python:3.8
   test-39:
     <<: *test-template
     docker:
-      - image: circleci/python:3.9
+      - <<: *docker-template
+        image: circleci/python:3.9
   docs:
     docker:
-      - image: circleci/python:3.9
+      - <<: *docker-template
+        image: circleci/python:3.9
     steps:
       - checkout
       - restore_cache:
