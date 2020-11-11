@@ -226,7 +226,6 @@ class BaseMeta(ABCMeta):
 
                 if isinstance(value.cls, str) and value.cls == name:
                     value.cls = cls
-
                 if not (isinstance(value.cls, type)
                         or getattr(value.cls, '__module__', "") == 'typing'):
                     raise ValueError(f'Invalid type specification ({str(value.cls)}) '

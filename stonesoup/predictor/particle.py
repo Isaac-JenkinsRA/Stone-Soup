@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
+import numpy as np
+
+from random import random
+
 from .base import Predictor
 from ._utils import predict_lru_cache
-from ..types.particle import Particle
+from ..types.particle import Particle, MultiModelParticle
 from ..types.prediction import ParticleStatePrediction
+from ..types.state import State
 
 
 class ParticlePredictor(Predictor):
@@ -49,5 +54,97 @@ class ParticlePredictor(Predictor):
                 Particle(new_state_vector,
                          weight=particle.weight,
                          parent=particle.parent))
+
+        return ParticleStatePrediction(new_particles, timestamp=timestamp)
+
+
+class MultiModelPredictor(Predictor):
+    """MultiModelPredictor class
+
+    An implementation of a Particle Filter predictor.
+    """
+
+    # transition_matrix: np.ndarray = Property(doc="transition matrix")
+    # position_mapping: np.ndarray = Property(default=None, doc="position mapping")
+#
+    # def __init__(self, transition_matrix, position_mapping, *args, **kwargs):
+    #     super().__init__(*args, **kwargs)
+#
+    #     self.position_mapping = position_mapping
+    #     self.transition_matrix = transition_matrix
+    #     self.model_list = self.transition_model
+#
+    #     self.probabilities = []
+    #     if type(self.transition_matrix) == float:
+    #         self.probabilities.append(self.transition_matrix)
+    #     else:
+    #         for rows in self.transition_matrix:
+    #             self.probabilities.append(np.cumsum(rows))
+
+    def predict(self, transition_matrix, position_mapping, prior, control_input=None, timestamp=None, **kwargs):
+        """Particle Filter prediction step
+
+        Parameters
+        ----------
+        prior : :class:`~.ParticleState`
+            A prior state object
+        control_input : :class:`~.State`, optional
+            The control input. It will only have an effect if
+            :attr:`control_model` is not `None` (the default is `None`)
+        timestamp: :class:`datetime.datetime`, optional
+            A timestamp signifying when the prediction is performed
+            (the default is `None`)
+        Returns
+        -------
+        : :class:`~.ParticleStatePrediction`
+            The predicted state
+        """
+
+        # self.position_mapping = position_mapping
+        # self.transition_matrix = transition_matrix
+
+        probabilities = []
+        if type(transition_matrix) == float:
+            probabilities.append(transition_matrix)
+        else:
+            for rows in transition_matrix:
+                probabilities.append(np.cumsum(rows))
+
+        # Compute time_interval
+        try:
+            time_interval = timestamp - prior.timestamp
+        except TypeError:
+            # TypeError: (timestamp or prior.timestamp) is None
+            time_interval = None
+        new_particles = []
+        for particle in prior.particles:
+            for model_index in range(len(transition_matrix)):
+                if particle.dynamic_model == model_index:
+
+                    # Change the value of the dynamic value randomly according to the defined transition matrix
+                    new_dynamic_model = np.searchsorted(probabilities[model_index], random())
+                    transition_model = self.transition_model[particle.dynamic_model]
+                    # Based on given position mapping create a new state vector that contains only the required states
+                    required_state_space = particle.state_vector[
+                                                                 np.array(position_mapping[particle.dynamic_model])
+                                                                ]
+                    state_vector = State(required_state_space, timestamp)
+                    new_state_vector = transition_model.function(
+                        state_vector,
+                        noise=True,
+                        time_interval=time_interval,
+                        **kwargs)
+
+                    # Calculate the indices removed from the state vector to become compatible with the dynamic model
+                    for j in range(len(particle.state_vector)):
+                        if j not in position_mapping[particle.dynamic_model]:
+                            new_state_vector = np.insert(new_state_vector, j, 0)
+
+                    new_state_vector = np.reshape(new_state_vector, (-1, 1))
+
+                    new_particles.append(MultiModelParticle(new_state_vector,
+                                                            weight=particle.weight,
+                                                            parent=particle,
+                                                            dynamic_model=new_dynamic_model))
 
         return ParticleStatePrediction(new_particles, timestamp=timestamp)
